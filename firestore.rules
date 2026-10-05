@@ -1,0 +1,96 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserRecord() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isMember(workspaceId) {
+      return isAuthenticated() 
+        && getUserRecord().workspaceId == workspaceId 
+        && getUserRecord().active == true;
+    }
+
+    function isStaff(workspaceId) {
+      return isMember(workspaceId) 
+        && (getUserRecord().role in ['ADMIN', 'MANAGER', 'AGENT']);
+    }
+
+    function isAdmin(workspaceId) {
+      return isMember(workspaceId) && getUserRecord().role == 'ADMIN';
+    }
+
+    match /users/{userId} {
+      allow create: if isAuthenticated() 
+        && request.auth.uid == userId 
+        && request.resource.data.uid == userId;
+      
+      allow read: if isAuthenticated() && (
+        request.auth.uid == userId 
+        || (getUserRecord().workspaceId == resource.data.workspaceId)
+      );
+      
+      allow update, delete: if isAuthenticated() 
+        && getUserRecord().role == 'ADMIN' 
+        && getUserRecord().workspaceId == resource.data.workspaceId;
+    }
+
+    match /conversations/{conversationId} {
+      allow read: if isStaff(resource.data.workspaceId);
+      
+      allow update: if isStaff(request.resource.data.workspaceId)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'id',
+          'workspaceId',
+          'createdAt',
+          'phoneNumber',
+          'normalizedPhoneNumber',
+          'crmRecordId',
+          'crmRecordType',
+          'lastIncomingMessageAt',
+          'lastMessageAt',
+          'lastMessageDirection',
+          'unreadCount'
+        ]);
+      
+      allow delete: if isAdmin(resource.data.workspaceId);
+    }
+
+    match /messages/{messageId} {
+      allow read: if isStaff(resource.data.workspaceId);
+      allow create, update, delete: if false;
+    }
+
+    match /webhookEvents/{eventId} {
+      allow read: if isAuthenticated() && getUserRecord().role == 'ADMIN';
+      allow write: if false;
+    }
+
+    match /auditLogs/{logId} {
+      allow read: if isAuthenticated() && getUserRecord().role == 'ADMIN';
+      allow write: if false;
+    }
+
+    match /integrationSettings/{settingId} {
+      allow read: if isStaff(resource.data.workspaceId);
+      allow write: if isAdmin(request.resource.data.workspaceId);
+    }
+
+    match /rateLimitBuckets/{bucketId} {
+      allow read, write: if false;
+    }
+
+    match /circuitBreakerStates/{stateId} {
+      allow read, write: if false;
+    }
+
+    match /messageLifecycleQueue/{queueId} {
+      allow read, write: if false;
+    }
+  }
+}

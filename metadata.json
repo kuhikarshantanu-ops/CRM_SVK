@@ -1,0 +1,8 @@
+{
+  "name": "Vtiger WhatsApp Enterprise CRM",
+  "description": "A secure, zero-trust, multi-tenant WhatsApp CRM featuring production-ready Firebase integration and automated credential-free demonstration modes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
